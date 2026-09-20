@@ -542,6 +542,10 @@ async function getRenderServiceInfo() {
 }
 
 const LOCATION_IDS = ['ubicacionA', 'ubicacionB'];
+const LOCATION_DISPLAY_NAMES = {
+    ubicacionA: 'Matanzas',
+    ubicacionB: 'Artemisa'
+};
 
 const LOCATION_ENV_MAP = {
     ubicacionA: { urlEnv: 'FIREBASE_UBICACION_A_DATABASE_URL', svcEnv: 'FIREBASE_UBICACION_A_SERVICE_ACCOUNT' },
@@ -582,6 +586,10 @@ for (const locId of LOCATION_IDS) {
 
 function isValidLocation(loc) {
     return LOCATION_IDS.includes(loc);
+}
+
+function getLocationDisplayName(loc) {
+    return LOCATION_DISPLAY_NAMES[loc] || loc;
 }
 
 function getLocationDb(loc) {
@@ -790,7 +798,7 @@ async function allocateNextOrderNumber(db) {
     }
 
     const nextNumber = Number(transactionResult.snapshot.val() || 0);
-    return `BS-${String(nextNumber).padStart(2, '0')}`;
+    return `EC-${String(nextNumber).padStart(2, '0')}`;
 }
 
 // Determina si un pedido pertenece al mismo usuario que otro, comparando por
@@ -2383,7 +2391,10 @@ app.post('/send-pedido', rateLimitMiddleware, async (req, res) => {
                 const response = await fetch(GOOGLE_APPS_SCRIPT_CORREO_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(orderData),
+                    body: JSON.stringify({
+                        ...orderData,
+                        ubicacion: getLocationDisplayName(ubicacion)
+                    }),
                     signal: controller.signal
                 });
                 const textResponse = await response.text();
