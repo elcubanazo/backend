@@ -544,7 +544,7 @@ async function getRenderServiceInfo() {
 const LOCATION_IDS = ['ubicacionA', 'ubicacionB'];
 const LOCATION_DISPLAY_NAMES = {
     ubicacionA: 'Matanzas',
-    ubicacionB: 'Artemisa'
+    ubicacionB: 'Güines Mayabeque'
 };
 
 const LOCATION_ENV_MAP = {

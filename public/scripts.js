@@ -1,5 +1,5 @@
 (function () {
-    const TOKEN_KEY = 'buquenque_auth_token';
+    const TOKEN_KEY = 'elcubanazo_auth_token';
     const originalFetch = window.fetch.bind(window);
     window.fetch = function (input, init) {
         const opts = init ? Object.assign({}, init) : {};
@@ -9,7 +9,7 @@
         }
         return originalFetch(input, opts);
     };
-    window.buquenqueAuth = {
+    window.elCubanazoAuth = {
         setToken(token) { localStorage.setItem(TOKEN_KEY, token); },
         clearToken() { localStorage.removeItem(TOKEN_KEY); }
     };
@@ -776,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await fetch('/api/auth/logout', { method: 'POST' });
             } finally {
-                window.buquenqueAuth.clearToken();
+                window.elCubanazoAuth.clearToken();
                 window.location.href = '/login';
             }
         });
@@ -866,7 +866,7 @@ async function sendTestNotification() {
             showNotificationPanel(`✅ Notificación enviada correctamente!\nID: ${data.messageId}`, 'success');
             closeTestNotificationModal();
             document.getElementById('notif-titulo').value = '🧪 Notificación de Prueba';
-            document.getElementById('notif-mensaje').value = 'Esta es una notificación de prueba desde el servidor Buquenque.';
+            document.getElementById('notif-mensaje').value = 'Esta es una notificación de prueba desde el servidor El Cubanazo.';
             document.getElementById('notif-tipo').value = 'test';
         } else {
             throw new Error(data.message || 'Error desconocido al enviar la notificación');
