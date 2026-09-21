@@ -2825,10 +2825,21 @@ app.post('/api/estadisticas/migrar-legado', async (req, res) => {
 });
 const NOTIFICATION_BANNER_PATH = 'notificationBanner';
 
+function getNotificationLocation(req) {
+    const ubicacion = req.authUbicacion || req.query.ubicacion;
+    if (!isValidLocation(ubicacion) || !locationDbs[ubicacion]) return null;
+    return { id: ubicacion, db: req.locationRtdb || locationDbs[ubicacion] };
+}
+
 app.get('/api/notification-banner', async (req, res) => {
     try {
-        const banner = await getOrSetCache('notification-banner', CACHE_TTL.NOTIFICATION, async () => {
-            const snapshot = await rtdb.ref(NOTIFICATION_BANNER_PATH).once('value');
+        const location = getNotificationLocation(req);
+        if (!location) {
+            return res.status(400).json({ success: false, message: 'Debes indicar una ubicación válida (?ubicacion=ubicacionA o ubicacionB).' });
+        }
+        const cacheKey = `notification-banner:${location.id}`;
+        const banner = await getOrSetCache(cacheKey, CACHE_TTL.NOTIFICATION, async () => {
+            const snapshot = await location.db.ref(NOTIFICATION_BANNER_PATH).once('value');
             return snapshot.val() || null;
         });
         setPublicCacheHeaders(res, 30, 120);
@@ -2854,8 +2865,12 @@ app.get('/api/afiliados', async (req, res) => {
 
 app.get('/api/mensajes', async (req, res) => {
     try {
-        const mensajes = await getOrSetCache('mensajes', CACHE_TTL.PUBLIC_DATA, async () => {
-            const snapshot = await rtdb.ref('mensajes').once('value');
+        const location = getNotificationLocation(req);
+        if (!location) {
+            return res.status(400).json({ success: false, message: 'Debes indicar una ubicación válida (?ubicacion=ubicacionA o ubicacionB).' });
+        }
+        const mensajes = await getOrSetCache(`mensajes:${location.id}`, CACHE_TTL.PUBLIC_DATA, async () => {
+            const snapshot = await location.db.ref('mensajes').once('value');
             const data = snapshot.val();
             return Array.isArray(data) ? data : (data ? Object.values(data) : []);
         });
@@ -2941,8 +2956,13 @@ app.get('/api/pay', async (req, res) => {
 
 async function guardarNotificationBannerHandler(req, res) {
     try {
+        const location = getNotificationLocation(req);
+        if (!location) {
+            return res.status(400).json({ success: false, message: 'No se pudo determinar la ubicación de esta cuenta.' });
+        }
         const body = req.body || {};
-        const snapshot = await rtdb.ref(NOTIFICATION_BANNER_PATH).once('value');
+        const cacheKey = `notification-banner:${location.id}`;
+        const snapshot = await location.db.ref(NOTIFICATION_BANNER_PATH).once('value');
         const actual = snapshot.val() || {};
 
         // El id nunca lo decide el cliente: se regenera siempre distinto al
@@ -2959,9 +2979,9 @@ async function guardarNotificationBannerHandler(req, res) {
             tipo: body.tipo !== undefined ? String(body.tipo) : (actual.tipo || 'info')
         };
 
-        await rtdb.ref(NOTIFICATION_BANNER_PATH).set(banner);
-        cacheSet('notification-banner', banner, CACHE_TTL.NOTIFICATION);
-        addLog(`Banner de notificación actualizado (id: ${banner.id}).`);
+        await location.db.ref(NOTIFICATION_BANNER_PATH).set(banner);
+        cacheSet(cacheKey, banner, CACHE_TTL.NOTIFICATION);
+        addLog(`Banner de notificación actualizado para ${location.id} (id: ${banner.id}).`);
         return res.json({ success: true, banner });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Error al guardar el banner de notificación', error: error.message });
@@ -4232,12 +4252,12 @@ app.get('/api/bootstrap', async (req, res) => {
         const [productMap, packMap, banner, mensajes, evento, info, pay, ratings] = await Promise.all([
             getSecondaryProductMap(ubicacion),
             getPackMap(ubicacion),
-            getOrSetCache('notification-banner', CACHE_TTL.NOTIFICATION, async () => {
-                const snapshot = await rtdb.ref(NOTIFICATION_BANNER_PATH).once('value');
+            getOrSetCache(`notification-banner:${ubicacion}`, CACHE_TTL.NOTIFICATION, async () => {
+                const snapshot = await locationDbs[ubicacion].ref(NOTIFICATION_BANNER_PATH).once('value');
                 return snapshot.val() || null;
             }),
-            getOrSetCache('mensajes', CACHE_TTL.PUBLIC_DATA, async () => {
-                const snapshot = await rtdb.ref('mensajes').once('value');
+            getOrSetCache(`mensajes:${ubicacion}`, CACHE_TTL.PUBLIC_DATA, async () => {
+                const snapshot = await locationDbs[ubicacion].ref('mensajes').once('value');
                 const data = snapshot.val();
                 return Array.isArray(data) ? data : (data ? Object.values(data) : []);
             }),
