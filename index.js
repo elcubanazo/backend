@@ -992,6 +992,13 @@ async function descontarStockPorCompras(comprasInput) {
         const cantidad = extraerCantidadDeCompra(item);
         if (cantidad <= 0) continue;
 
+        const esPack = Boolean(item.type === 'pack' || item.isPack || item.pack);
+        if (esPack) {
+            omitidos.push({ id: item.id || item.productId || item.name || 'pack', motivo: 'pack_sin_stock' });
+            addLog(`INFO: Se omite validación de stock para pack en el carrito: ${JSON.stringify({ id: item.id || item.productId || item.name || 'pack', quantity: cantidad })}`);
+            continue;
+        }
+
         const resuelto = resolverProductoDesdeCompra(item, productMap);
         if (!resuelto) {
             noEncontrados.push({ item, motivo: 'producto_no_encontrado_por_id' });
@@ -1103,6 +1110,13 @@ async function restaurarStockPorCompras(comprasInput) {
         if (!item) continue;
         const cantidad = extraerCantidadDeCompra(item);
         if (cantidad <= 0) continue;
+
+        const esPack = Boolean(item.type === 'pack' || item.isPack || item.pack);
+        if (esPack) {
+            omitidos.push({ id: item.id || item.productId || item.name || 'pack', motivo: 'pack_sin_stock' });
+            addLog(`INFO: Se omite restauración de stock para pack: ${JSON.stringify({ id: item.id || item.productId || item.name || 'pack', quantity: cantidad })}`);
+            continue;
+        }
 
         const resuelto = resolverProductoDesdeCompra(item, productMap);
         if (!resuelto) {
@@ -2067,18 +2081,23 @@ app.get(/^\/p\/(.*)/, async (req, res) => {
 
         if (!product) {
             console.log(`[Backend] Producto/Pack "${id}" no encontrado.`);
+            const siteOrigin = process.env.SITE_ORIGIN || 'https://cubanazo.soporte-elcubanazo.workers.dev';
             return res.send(`<!DOCTYPE html>
         <html lang="es">
         <head>
             <meta charset="UTF-8">
-            <meta property="og:title" content="Producto no encontrado - Buquenqe" />
-
-            <link rel="icon" href="https://www.buquenqe.com/Images/favicon.ico" type="image/x-icon" />
-            <link rel="shortcut icon" href="https://www.buquenqe.com/Images/favicon.ico" />
-
-            <meta property="og:image" content="https://www.buquenqe.com/Images/social-share-banner.jpg" />
+            <title>Producto no encontrado - El Cubanazo</title>
+            <meta name="description" content="Producto no encontrado en El Cubanazo." />
+            <meta property="og:site_name" content="El Cubanazo" />
+            <meta property="og:title" content="Producto no encontrado - El Cubanazo" />
+            <meta property="og:description" content="Producto no encontrado en El Cubanazo." />
+            <meta property="og:url" content="${siteOrigin}/" />
+            <meta property="og:image" content="${siteOrigin}/Images/social-share-banner.jpg" />
+            <meta name="twitter:card" content="summary_large_image" />
+            <link rel="icon" href="${siteOrigin}/Images/favicon.png" type="image/png" />
+            <link rel="shortcut icon" href="${siteOrigin}/Images/favicon.ico" />
         </head>
-        <body><script>window.location.href = "https://www.buquenqe.com/index.html";</script></body>
+        <body><script>window.location.href = "${siteOrigin}/#";</script></body>
         </html>`);
         }
 
@@ -2097,45 +2116,50 @@ app.get(/^\/p\/(.*)/, async (req, res) => {
 
         // Datos para Meta Tags
         const nombre = product.nombre || "Producto";
-        const descripcion = product.descripcion || "Disponible en Buquenqe";
-        const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "TU_CLOUD_NAME";
+        const descripcion = product.descripcion || "Disponible en El Cubanazo";
+        const siteOrigin = process.env.SITE_ORIGIN || 'https://cubanazo.soporte-elcubanazo.workers.dev';
+        const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "vq0diauv";
         const imagen = (product.imagenes && product.imagenes.length)
             ? `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/f_webp,q_auto/products/${encodeURIComponent(product.imagenes[0])}`
-            : "https://www.buquenqe.com/Images/social-share-banner.jpg";
+            : `${siteOrigin}/Images/social-share-banner.jpg`;
 
-        // IMPORTANTE: URL absoluta para WhatsApp
-        const canonicalUrl = `https://www.buquenqe.com/p/${encodeURIComponent(id)}`;
+        // IMPORTANTE: URL absoluta para la vista pública
+        const canonicalUrl = `${siteOrigin}/p/${encodeURIComponent(id)}`;
 
         res.send(`<!DOCTYPE html>
         <html lang="es">
         <head>
             <meta charset="UTF-8">
-            <title>${_escapeHtml(nombre)}</title>
+            <title>${_escapeHtml(nombre)} - El Cubanazo</title>
+            <meta name="description" content="${_escapeHtml(descripcion)}" />
 
-            <link rel="icon" href="https://www.buquenqe.com/Images/favicon.ico" type="image/x-icon" />
-            <link rel="shortcut icon" href="https://www.buquenqe.com/Images/favicon.ico" />
+            <link rel="icon" href="${siteOrigin}/Images/favicon.png" type="image/png" />
+            <link rel="shortcut icon" href="${siteOrigin}/Images/favicon.ico" />
 
-            <meta property="og:site_name" content="Buquenque Shop" />
-
-            <meta property="og:title" content="${_escapeHtml(nombre)}" />
+            <meta property="og:site_name" content="El Cubanazo" />
+            <meta property="og:title" content="${_escapeHtml(nombre)} - El Cubanazo" />
             <meta property="og:description" content="${_escapeHtml(descripcion)}" />
             <meta property="og:image" content="${imagen}" />
+            <meta property="og:image:alt" content="${_escapeHtml(nombre)}" />
             <meta property="og:url" content="${canonicalUrl}" />
+            <meta property="og:type" content="website" />
+            <meta property="og:locale" content="es_ES" />
             <meta name="twitter:card" content="summary_large_image" />
-
+            <meta name="twitter:title" content="${_escapeHtml(nombre)} - El Cubanazo" />
+            <meta name="twitter:description" content="${_escapeHtml(descripcion)}" />
+            <meta name="twitter:image" content="${imagen}" />
 
             <meta property="product:price:amount" content="${precioActual}" />
-            <meta property="product:price:currency" content="Zelle" />
+            <meta property="product:price:currency" content="CUP" />
 
             ${precioAntes !== null ? `
             <meta property="product:original_price:amount" content="${precioAntes}" />
-            <meta property="product:original_price:currency" content="Zelle" />
+            <meta property="product:original_price:currency" content="CUP" />
             ` : ""}
         </head>
         <body>
             <script>
-                // Redirigir al index usando el hash que lee tu script.js
-                window.location.href = "https://www.buquenqe.com/index.html#" + encodeURIComponent("${id}");
+                window.location.href = "${siteOrigin}/#" + encodeURIComponent("${id}");
             </script>
         </body>
         </html>`);
