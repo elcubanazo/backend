@@ -471,6 +471,32 @@ function showToast(message, isError = false) {
     }, 2600);
 }
 
+async function apiFetch(url, options = {}) {
+    const method = options.method || 'GET';
+    const requestHeaders = new Headers(options.headers || {});
+    if (!(requestHeaders.has('Content-Type')) && !(options.body instanceof FormData) && method !== 'GET' && method !== 'HEAD') {
+        requestHeaders.set('Content-Type', 'application/json');
+    }
+    if (!(requestHeaders.has('Accept'))) {
+        requestHeaders.set('Accept', 'application/json');
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers: requestHeaders,
+        body: options.body && typeof options.body === 'object' && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)
+            ? JSON.stringify(options.body)
+            : options.body
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+        const message = data && (data.message || data.error) ? (data.message || data.error) : 'La petición falló.';
+        throw new Error(message);
+    }
+    return data;
+}
+
 async function loadLocationCredentials(){
     try {
         const data = await apiFetch('/api/admin/location-users');
