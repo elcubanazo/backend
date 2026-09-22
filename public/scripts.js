@@ -419,6 +419,52 @@ async function updateStatistics() {
     }
 }
 
+async function loadLocationCredentials(){
+    try {
+        const data = await apiFetch('/api/admin/location-users');
+        document.querySelectorAll('.location-credential-card').forEach(card => {
+            const location = card.dataset.location;
+            const user = data.users?.[location];
+            const usernameInput = card.querySelector('[name="username"]');
+            const passwordInput = card.querySelector('[name="password"]');
+            const status = card.querySelector('[data-status]');
+            if (usernameInput) usernameInput.value = user?.username || '';
+            if (passwordInput) passwordInput.value = '';
+            if (status) status.textContent = user?.passwordConfigured
+                ? `Configurado${user.updatedAt ? ` · actualizado ${new Date(user.updatedAt).toLocaleString('es-ES')}` : ''}`
+                : 'Sin credenciales configuradas';
+        });
+    } catch (error) {
+        document.querySelectorAll('[data-status]').forEach(status => { status.textContent = error.message; });
+    }
+}
+
+async function saveLocationCredentials(event){
+    event.preventDefault();
+    const form = event.currentTarget;
+    const location = form.dataset.location;
+    const username = form.querySelector('[name="username"]')?.value.trim();
+    const passwordInput = form.querySelector('[name="password"]');
+    const password = passwordInput?.value || '';
+    const status = form.querySelector('[data-status]');
+    if (!username || (password && password.length < 8)) {
+        if (status) status.textContent = 'Indica un usuario y una contraseña de al menos 8 caracteres.';
+        return;
+    }
+    try {
+        const data = await apiFetch(`/api/admin/location-users/${location}`, {
+            method: 'PUT',
+            body: JSON.stringify({ username, password })
+        });
+        if (passwordInput) passwordInput.value = '';
+        if (status) status.textContent = `Guardado: ${data.user.username}`;
+        showToast('Credenciales actualizadas.');
+    } catch (error) {
+        if (status) status.textContent = error.message;
+        showToast(error.message, true);
+    }
+}
+
 function renderTrafficChart(stats) {
     const totalLabel = document.getElementById('traffic-total-label');
     if (!Array.isArray(stats)) return;
@@ -764,11 +810,15 @@ function initDashboard() {
     updateLastUpdatedLabel();
     fetchRenderService();
     fetchRenderMetrics();
+    loadLocationCredentials();
 }
 
 window.addEventListener('load', initDashboard);
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('refresh-location-credentials')?.addEventListener('click', loadLocationCredentials);
+    document.querySelectorAll('.location-credential-card').forEach(form => form.addEventListener('submit', saveLocationCredentials));
+
     const logoutButton = document.getElementById('logout-button');
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {

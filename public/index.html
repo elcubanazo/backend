@@ -45,6 +45,42 @@
             </div>
         </div>
 
+        <section class="card panel location-credentials-panel">
+            <div class="panel-header">
+                <div>
+                    <h2><i class="fas fa-key"></i> Credenciales de analíticas</h2>
+                    <p class="panel-subtitle">Configura el acceso de cada ubicación. Las contraseñas existentes no se muestran.</p>
+                </div>
+                <button class="btn btn-secondary" id="refresh-location-credentials" type="button">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
+            <div class="location-credentials-grid">
+                <form class="location-credential-card" data-location="ubicacionA">
+                    <h3><i class="fas fa-location-dot"></i> Matanzas</h3>
+                    <label>Usuario
+                        <input type="text" name="username" autocomplete="off" required>
+                    </label>
+                    <label>Nueva contraseña
+                        <input type="password" name="password" minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres" required>
+                    </label>
+                    <p class="credential-status" data-status>Comprobando...</p>
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Guardar Matanzas</button>
+                </form>
+                <form class="location-credential-card" data-location="ubicacionB">
+                    <h3><i class="fas fa-location-dot"></i> Güines Mayabeque</h3>
+                    <label>Usuario
+                        <input type="text" name="username" autocomplete="off" required>
+                    </label>
+                    <label>Nueva contraseña
+                        <input type="password" name="password" minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres" required>
+                    </label>
+                    <p class="credential-status" data-status>Comprobando...</p>
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Guardar Mayabeque</button>
+                </form>
+            </div>
+        </section>
+
         <nav class="tab-bar" id="tab-bar">
             <button class="tab-btn active" data-tab="tab-overview"><i class="fas fa-gauge-high"></i> Overview</button>
             <button class="tab-btn" data-tab="tab-deploys"><i class="fas fa-rocket"></i> Deploys</button>

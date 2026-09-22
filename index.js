@@ -1421,6 +1421,8 @@ app.set('trust proxy', 1);
 
 
 const ADMIN_USERS_RTDB_PATH = 'admin_users';
+const PANEL_ADMIN_USERNAME = String(process.env.PANEL_ADMIN_USERNAME || '').trim();
+const PANEL_ADMIN_PASSWORD = String(process.env.PANEL_ADMIN_PASSWORD || '');
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 if (!process.env.SESSION_SECRET) {
     console.warn('WARN: No se definió SESSION_SECRET en las variables de entorno. Se generó una temporal: las sesiones se cerrarán solas cada vez que el servidor reinicie/redeploye. Define SESSION_SECRET en Render para evitarlo.');
@@ -1464,6 +1466,7 @@ function createAuthToken(user) {
     const payload = {
         userId: user.userId,
         username: user.username,
+        role: user.role || 'location-admin',
         ubicacion: user.ubicacion,
         tokenEpoch: user.tokenEpoch,
         expires: Date.now() + TOKEN_TTL_MS
@@ -1496,12 +1499,28 @@ async function getAuthFromToken(req) {
     }
     if (!payload || !payload.userId || !payload.expires || payload.expires < Date.now()) return null;
 
+    if (payload.role === 'panel-admin' && payload.userId === 'panel-admin') {
+        if (payload.username !== PANEL_ADMIN_USERNAME || payload.tokenEpoch !== 1) return null;
+        return { token, userId: 'panel-admin', username: PANEL_ADMIN_USERNAME, role: 'panel-admin', ubicacion: null };
+    }
+
     const users = await listAdminUsersCached();
     const user = users.find(u => u.userId === payload.userId);
     if (!user || user.username !== payload.username) return null;
     if (user.tokenEpoch && payload.tokenEpoch !== user.tokenEpoch) return null; // revocado por cambio de contraseña
 
-    return { token, userId: user.userId, username: user.username, ubicacion: user.ubicacion };
+    return { token, userId: user.userId, username: user.username, role: user.role || 'location-admin', ubicacion: user.ubicacion };
+}
+
+function secureCompareText(actual, expected) {
+    const actualBuffer = Buffer.from(String(actual || ''));
+    const expectedBuffer = Buffer.from(String(expected || ''));
+    if (actualBuffer.length !== expectedBuffer.length) return false;
+    return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function isPanelAdmin(auth) {
+    return auth && auth.role === 'panel-admin';
 }
 
 function revokeAuthToken(req) {
@@ -1569,17 +1588,40 @@ bootstrapAdminCredentials();
 
 async function requireAuth(req, res, next) {
     if (req.session && req.session.isAuthenticated) {
-        req.authUsername = req.session.username;
-        req.authUbicacion = req.session.ubicacion;
-        req.authUserId = req.session.userId;
+        const sessionAuth = {
+            username: req.session.username,
+            role: req.session.role,
+            ubicacion: req.session.ubicacion,
+            userId: req.session.userId
+        };
+        req.authUsername = sessionAuth.username;
+        req.authRole = sessionAuth.role;
+        req.authUbicacion = sessionAuth.ubicacion;
+        req.authUserId = sessionAuth.userId;
+        if (!isPanelAdmin(sessionAuth) && !(sessionAuth.role === 'location-admin'
+            && (req.path.startsWith('/api/') || req.path === '/obtener-estadisticas'))) {
+            return res.status(403).json({ success: false, message: 'Esta cuenta solo tiene acceso a las analíticas de su ubicación.' });
+        }
         return next();
     }
     const tokenAuth = await getAuthFromToken(req);
-    if (tokenAuth) {
+    if (tokenAuth && isPanelAdmin(tokenAuth)) {
         req.authUsername = tokenAuth.username;
+        req.authRole = tokenAuth.role;
         req.authUbicacion = tokenAuth.ubicacion;
         req.authUserId = tokenAuth.userId;
         return next();
+    }
+    if (tokenAuth && tokenAuth.role === 'location-admin'
+        && (req.path.startsWith('/api/') || req.path === '/obtener-estadisticas')) {
+        req.authUsername = tokenAuth.username;
+        req.authRole = tokenAuth.role;
+        req.authUbicacion = tokenAuth.ubicacion;
+        req.authUserId = tokenAuth.userId;
+        return next();
+    }
+    if (tokenAuth) {
+        return res.status(403).json({ success: false, message: 'Esta cuenta solo tiene acceso a las analíticas de su ubicación.' });
     }
     if (req.path.startsWith('/api/')) {
         return res.status(401).json({ success: false, message: 'No autenticado. Inicia sesión para continuar.' });
@@ -1608,6 +1650,9 @@ function resolveLocationDb(req, res, next) {
 // Se compara por método + prefijo del path.
 const PUBLIC_ROUTES = [
     { method: 'GET', prefix: '/login' },
+    { method: 'GET', prefix: '/login.css' },
+    { method: 'GET', prefix: '/login.js' },
+    { method: 'GET', prefix: '/logo_2.png' },
     { method: 'POST', prefix: '/api/auth/login' },
     { method: 'POST', prefix: '/api/auth/logout' },
     { method: 'GET', prefix: '/api/auth/me' },
@@ -1646,10 +1691,7 @@ function isPublicRoute(req) {
 // sesión iniciada. Justo después, resolveLocationDb fija la ubicación
 // de la cuenta para el resto de la petición.
 // ---------------------------------------------------------------------
-const STATIC_SHELL_PATHS = new Set(['/', '/scripts.js', '/styles.css', '/logo_2.png']);
-
 app.use((req, res, next) => {
-    if (req.method === 'GET' && STATIC_SHELL_PATHS.has(req.path)) return next();
     if (isPublicRoute(req)) return next();
     return requireAuth(req, res, next);
 });
@@ -1659,23 +1701,35 @@ app.use(resolveLocationDb);
 
 app.post('/api/auth/login', rateLimitMiddleware, async (req, res) => {
     try {
-        const { username, password } = req.body || {};
+        const { username, password, scope = 'panel' } = req.body || {};
         if (!username || !password) {
             return res.status(400).json({ success: false, message: 'Usuario y contraseña son obligatorios.' });
         }
 
-        const users = await listAdminUsers();
-        if (!users.length) {
-            return res.status(503).json({ success: false, message: 'No hay credenciales de administrador configuradas en el servidor.' });
-        }
-
         let matchedUser = null;
-        for (const user of users) {
-            if (String(username) !== String(user.username)) continue;
-            const passwordMatches = await bcrypt.compare(String(password), user.passwordHash);
-            if (passwordMatches) {
-                matchedUser = user;
-                break;
+        if (scope === 'analytics') {
+            const users = await listAdminUsers();
+            for (const user of users) {
+                if (!isValidLocation(user.ubicacion) || String(username) !== String(user.username)) continue;
+                if (await bcrypt.compare(String(password), user.passwordHash)) {
+                    matchedUser = { ...user, role: 'location-admin' };
+                    break;
+                }
+            }
+        } else if (scope === 'panel') {
+            if (!PANEL_ADMIN_USERNAME || !PANEL_ADMIN_PASSWORD) {
+                return res.status(503).json({ success: false, message: 'El acceso general no está configurado en el servidor.' });
+            }
+            const credentialsMatch = secureCompareText(username, PANEL_ADMIN_USERNAME)
+                && secureCompareText(password, PANEL_ADMIN_PASSWORD);
+            if (credentialsMatch) {
+                matchedUser = {
+                    userId: 'panel-admin',
+                    username: PANEL_ADMIN_USERNAME,
+                    role: 'panel-admin',
+                    ubicacion: null,
+                    tokenEpoch: 1
+                };
             }
         }
 
@@ -1687,10 +1741,11 @@ app.post('/api/auth/login', rateLimitMiddleware, async (req, res) => {
         req.session.isAuthenticated = true;
         req.session.username = matchedUser.username;
         req.session.userId = matchedUser.userId;
+        req.session.role = matchedUser.role;
         req.session.ubicacion = matchedUser.ubicacion;
         const token = createAuthToken(matchedUser);
-        addLog(`Login correcto: ${matchedUser.username} (${matchedUser.ubicacion})`);
-        return res.json({ success: true, username: matchedUser.username, ubicacion: matchedUser.ubicacion, token });
+        addLog(`Login correcto: ${matchedUser.username} (${matchedUser.role}${matchedUser.ubicacion ? `, ${matchedUser.ubicacion}` : ''})`);
+        return res.json({ success: true, username: matchedUser.username, role: matchedUser.role, ubicacion: matchedUser.ubicacion || null, token });
     } catch (error) {
         console.error('Error en /api/auth/login:', error);
         return res.status(500).json({ success: false, message: 'Error interno al iniciar sesión.' });
@@ -1711,14 +1766,79 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (req.session && req.session.isAuthenticated) {
-        return res.json({ success: true, authenticated: true, username: req.session.username, ubicacion: req.session.ubicacion });
+    if (req.session && req.session.isAuthenticated && req.session.role) {
+        return res.json({ success: true, authenticated: true, username: req.session.username, role: req.session.role, ubicacion: req.session.ubicacion || null });
     }
     const tokenAuth = await getAuthFromToken(req);
     if (tokenAuth) {
-        return res.json({ success: true, authenticated: true, username: tokenAuth.username, ubicacion: tokenAuth.ubicacion });
+        return res.json({ success: true, authenticated: true, username: tokenAuth.username, role: tokenAuth.role, ubicacion: tokenAuth.ubicacion || null });
     }
     return res.json({ success: true, authenticated: false });
+});
+
+// Gestión exclusiva del panel general. Las contraseñas nunca se devuelven:
+// Firebase solo conserva sus hashes y el panel puede establecer una nueva.
+app.get('/api/admin/location-users', async (req, res) => {
+    if (req.authRole !== 'panel-admin') {
+        return res.status(403).json({ success: false, message: 'Solo el panel general puede gestionar estas credenciales.' });
+    }
+
+    try {
+        const users = await listAdminUsers();
+        const byLocation = {};
+        users.filter(user => isValidLocation(user.ubicacion)).forEach(user => {
+            byLocation[user.ubicacion] = {
+                userId: user.userId,
+                ubicacion: user.ubicacion,
+                username: user.username || '',
+                passwordConfigured: Boolean(user.passwordHash),
+                updatedAt: user.updatedAt || null
+            };
+        });
+        return res.json({ success: true, users: byLocation });
+    } catch (error) {
+        console.error('Error al listar credenciales de ubicación:', error);
+        return res.status(500).json({ success: false, message: 'No se pudieron cargar las credenciales.' });
+    }
+});
+
+app.put('/api/admin/location-users/:ubicacion', async (req, res) => {
+    if (req.authRole !== 'panel-admin') {
+        return res.status(403).json({ success: false, message: 'Solo el panel general puede gestionar estas credenciales.' });
+    }
+
+    const { ubicacion } = req.params;
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '');
+    if (!isValidLocation(ubicacion)) {
+        return res.status(400).json({ success: false, message: 'Ubicación no válida.' });
+    }
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Usuario y contraseña son obligatorios.' });
+    }
+    if (password.length < 8) {
+        return res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 8 caracteres.' });
+    }
+
+    try {
+        const users = await listAdminUsers();
+        const existing = users.find(user => user.ubicacion === ubicacion);
+        const userId = existing?.userId || rtdb.ref(ADMIN_USERS_RTDB_PATH).push().key;
+        const saved = await setAdminCredentials(userId, username, password, ubicacion);
+        return res.json({
+            success: true,
+            user: {
+                userId: saved.userId,
+                ubicacion: saved.ubicacion,
+                username: saved.username,
+                passwordConfigured: true,
+                updatedAt: saved.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('Error al guardar credenciales de ubicación:', error);
+        return res.status(500).json({ success: false, message: 'No se pudieron guardar las credenciales.' });
+    }
 });
 
 // Cambiar usuario/contraseña. Requiere sesión activa Y la contraseña
@@ -1728,6 +1848,10 @@ app.get('/api/auth/me', async (req, res) => {
 // único, para no mezclar cuentas de distintas ubicaciones.
 app.post('/api/auth/change-password', async (req, res) => {
     try {
+        if (req.authRole === 'panel-admin') {
+            return res.status(400).json({ success: false, message: 'Cambia las credenciales del panel mediante PANEL_ADMIN_USERNAME y PANEL_ADMIN_PASSWORD en el entorno del servidor.' });
+        }
+
         const { currentPassword, newUsername, newPassword } = req.body || {};
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ success: false, message: 'Debes indicar la contraseña actual y la nueva.' });

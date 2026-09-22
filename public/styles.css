@@ -434,6 +434,59 @@ a {
     gap: 8px;
 }
 
+.location-credentials-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.location-credential-card {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elevated);
+}
+
+.location-credential-card h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+}
+
+.location-credential-card label {
+    display: grid;
+    gap: 5px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.location-credential-card input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.location-credential-card input:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+.credential-status {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+@media (max-width: 720px) {
+    .location-credentials-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .panel-subtitle {
     margin: 0;
     font-size: 12px;
