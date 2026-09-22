@@ -2,11 +2,13 @@
     const TOKEN_KEY = 'elcubanazo_auth_token';
     const originalFetch = window.fetch.bind(window);
     window.fetch = function (input, init) {
-        const opts = init ? Object.assign({}, init) : {};
+        const opts = init ? { ...init } : {};
+        const headers = new Headers(opts.headers || {});
         const token = localStorage.getItem(TOKEN_KEY);
         if (token) {
-            opts.headers = Object.assign({}, opts.headers, { Authorization: `Bearer ${token}` });
+            headers.set('Authorization', `Bearer ${token}`);
         }
+        opts.headers = headers;
         return originalFetch(input, opts);
     };
     window.elCubanazoAuth = {
