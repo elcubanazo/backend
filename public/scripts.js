@@ -419,6 +419,58 @@ async function updateStatistics() {
     }
 }
 
+function showToast(message, isError = false) {
+    const containerId = 'el-cubanazo-toast-container';
+    let container = document.getElementById(containerId);
+
+    if (!container) {
+        container = document.createElement('div');
+        container.id = containerId;
+        Object.assign(container.style, {
+            position: 'fixed',
+            right: '20px',
+            bottom: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            zIndex: '99999',
+            pointerEvents: 'none'
+        });
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    Object.assign(toast.style, {
+        minWidth: '220px',
+        maxWidth: '360px',
+        padding: '12px 16px',
+        borderRadius: '10px',
+        background: isError ? '#b42318' : '#0f766e',
+        color: '#fff',
+        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.22)',
+        fontSize: '14px',
+        fontWeight: '600',
+        lineHeight: '1.4',
+        opacity: '0',
+        transform: 'translateY(8px)',
+        transition: 'opacity 0.18s ease, transform 0.18s ease',
+        pointerEvents: 'none'
+    });
+
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 200);
+    }, 2600);
+}
+
 async function loadLocationCredentials(){
     try {
         const data = await apiFetch('/api/admin/location-users');
