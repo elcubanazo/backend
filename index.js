@@ -592,6 +592,14 @@ function getLocationDisplayName(loc) {
     return LOCATION_DISPLAY_NAMES[loc] || loc;
 }
 
+function getCorreoDestinatarioPorUbicacion(loc) {
+    const map = {
+        ubicacionA: String(process.env.CORREO_UBICACION_A || 'alederibia@gmail.com').trim() || 'alederibia@gmail.com',
+        ubicacionB: String(process.env.CORREO_UBICACION_B || 'soporte.elcubanazo@gmail.com').trim() || 'soporte.elcubanazo@gmail.com'
+    };
+    return map[loc] || 'soporte.elcubanazo@gmail.com';
+}
+
 function getLocationDb(loc) {
     return locationDbs[loc] || null;
 }
@@ -2541,7 +2549,10 @@ app.post('/send-pedido', rateLimitMiddleware, async (req, res) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...orderData,
-                        ubicacion: getLocationDisplayName(ubicacion)
+                        ubicacion: ubicacion,
+                        ubicacion_id: ubicacion,
+                        ubicacion_display: getLocationDisplayName(ubicacion),
+                        destinatario: getCorreoDestinatarioPorUbicacion(ubicacion)
                     }),
                     signal: controller.signal
                 });
