@@ -4579,12 +4579,46 @@ app.post('/api/suscribir-pedidos', rateLimitMiddleware, async (req, res) => {
     if (db) {
       const tokens = await readSecondaryNode(db, 'subscriptions/tokens', []);
       const nextTokens = Array.isArray(tokens) ? tokens : [];
-      if (!nextTokens.includes(sanitizedToken)) {
-        nextTokens.push(sanitizedToken);
-        await writeSecondaryNode(db, 'subscriptions/tokens', nextTokens);
-        addLog(`Token almacenado en RTDB de ${ubicacion}: ${sanitizedToken}`);
+      const normalizeTokenRecord = (value) => {
+        if (typeof value === 'string') {
+          return {
+            token: value,
+            ubicacion,
+            source: 'legacy',
+            platform: 'unknown',
+            createdAt: new Date().toISOString(),
+            app: 'desconocida'
+          };
+        }
+        if (value && typeof value === 'object' && value.token) {
+          return {
+            token: value.token,
+            ubicacion: value.ubicacion || ubicacion,
+            source: value.source || 'app',
+            platform: value.platform || 'unknown',
+            createdAt: value.createdAt || new Date().toISOString(),
+            app: value.app || 'desconocida'
+          };
+        }
+        return null;
+      };
+
+      const normalizedTokens = nextTokens.map(normalizeTokenRecord).filter(Boolean);
+      const exists = normalizedTokens.some(item => item.token === sanitizedToken && (item.ubicacion || ubicacion) === ubicacion);
+
+      if (!exists) {
+        normalizedTokens.push({
+          token: sanitizedToken,
+          ubicacion,
+          source: 'app-mayabeque',
+          platform: 'android',
+          createdAt: new Date().toISOString(),
+          app: 'mayabeque'
+        });
+        await writeSecondaryNode(db, 'subscriptions/tokens', normalizedTokens);
+        addLog(`Token almacenado en RTDB de ${ubicacion}: ${sanitizedToken} | source=${ubicacion === 'ubicacionB' ? 'app-mayabeque' : 'app-matanzas'}`);
       }
-      return res.json({ success: true, message: `Token suscrito al topic ${topic}`, token: sanitizedToken });
+      return res.json({ success: true, message: `Token suscrito al topic ${topic}`, token: sanitizedToken, ubicacion });
     }
 
     const tokens = await readJsonFile(fcmTokensFilePath, []);

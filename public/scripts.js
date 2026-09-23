@@ -1077,14 +1077,29 @@ async function loadFcmTokens() {
             return;
         }
 
-        const selectedLocation = locationSelect ? locationSelect.value : null;
         const tokensMap = data.tokens && typeof data.tokens === 'object' && !Array.isArray(data.tokens)
             ? data.tokens
             : { ubicacionA: Array.isArray(data.tokens) ? data.tokens : [], ubicacionB: [] };
 
+        const selectedLocation = locationSelect ? locationSelect.value : 'ubicacionB';
         const tokens = Array.isArray(tokensMap[selectedLocation]) ? tokensMap[selectedLocation] : [];
 
+        const locationCounts = {
+            ubicacionA: Array.isArray(tokensMap.ubicacionA) ? tokensMap.ubicacionA.length : 0,
+            ubicacionB: Array.isArray(tokensMap.ubicacionB) ? tokensMap.ubicacionB.length : 0
+        };
+
+        const aCountEl = document.getElementById('fcm-count-ubicacionA');
+        const bCountEl = document.getElementById('fcm-count-ubicacionB');
+        if (aCountEl) aCountEl.textContent = String(locationCounts.ubicacionA);
+        if (bCountEl) bCountEl.textContent = String(locationCounts.ubicacionB);
         if (countBadge) countBadge.textContent = String(tokens.length);
+
+        const cards = document.querySelectorAll('.location-card');
+        cards.forEach(card => {
+            const isSelected = card.dataset.location === selectedLocation;
+            card.classList.toggle('is-active', isSelected);
+        });
 
         if (tokens.length === 0) {
             listContainer.innerHTML = '<p class="token-list-placeholder">No hay tokens cargados para esta ubicación todavía.</p>';
@@ -1092,7 +1107,7 @@ async function loadFcmTokens() {
         }
 
         listContainer.innerHTML = '';
-        tokens.forEach((token, index) => {
+        tokens.forEach((entry, index) => {
             const tokenItem = document.createElement('div');
             tokenItem.className = 'token-item';
 
@@ -1102,7 +1117,10 @@ async function loadFcmTokens() {
 
             const tokenValue = document.createElement('div');
             tokenValue.className = 'token-value';
-            tokenValue.textContent = token;
+
+            const tokenText = typeof entry === 'string' ? entry : (entry && entry.token) ? entry.token : '';
+            const sourceText = typeof entry === 'object' && entry && entry.source ? ` • ${entry.source}` : '';
+            tokenValue.textContent = `${tokenText}${sourceText}`;
 
             tokenItem.appendChild(tokenIndex);
             tokenItem.appendChild(tokenValue);
