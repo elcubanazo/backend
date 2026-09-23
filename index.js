@@ -4530,13 +4530,22 @@ app.post("/api/send-test-notification", async (req, res) => {
   }
 });
 
-// API para listar tokens FCM suscritos al topic de pedidos de mi ubicación
+// API para listar tokens FCM suscritos al topic de pedidos por ubicación.
 app.get('/api/fcm-tokens', async (req, res) => {
   try {
-    const tokens = req.locationRtdb
-      ? await readSecondaryNode(req.locationRtdb, 'subscriptions/tokens', [])
-      : await readJsonFile(fcmTokensFilePath, []);
-    return res.json({ success: true, tokens });
+    if (req.locationRtdb && req.ubicacion) {
+      const tokens = await readSecondaryNode(req.locationRtdb, 'subscriptions/tokens', []);
+      return res.json({ success: true, tokens, ubicacion: req.ubicacion });
+    }
+
+    const tokensByLocation = {};
+    for (const loc of LOCATION_IDS) {
+      const db = locationDbs[loc];
+      const tokens = db ? await readSecondaryNode(db, 'subscriptions/tokens', []) : [];
+      tokensByLocation[loc] = Array.isArray(tokens) ? tokens : [];
+    }
+
+    return res.json({ success: true, tokens: tokensByLocation, ubicacion: null });
   } catch (error) {
     const errorMsg = `ERROR al obtener tokens FCM: ${error.message}`;
     addLog(errorMsg);

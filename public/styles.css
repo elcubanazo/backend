@@ -566,6 +566,56 @@ a {
     border-radius: 999px;
 }
 
+.fcm-location-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.location-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.location-card.is-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(76, 110, 245, 0.2);
+    background: rgba(76, 110, 245, 0.08);
+}
+
+.location-card strong {
+    font-size: 24px;
+    line-height: 1;
+    margin: 0;
+    color: var(--text);
+}
+
+.location-card small {
+    color: var(--text-faint);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.location-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
 .fcm-token-form {
     display: flex;
     gap: 10px;
@@ -573,7 +623,8 @@ a {
     flex-wrap: wrap;
 }
 
-.fcm-token-form input {
+.fcm-token-form input,
+.location-select {
     flex: 1;
     min-width: 220px;
     padding: 9px 12px;
@@ -585,7 +636,8 @@ a {
     font-size: 13px;
 }
 
-.fcm-token-form input:focus {
+.fcm-token-form input:focus,
+.location-select:focus {
     outline: none;
     border-color: var(--accent);
 }

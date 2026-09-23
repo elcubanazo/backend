@@ -292,11 +292,29 @@
                 <div class="panel-header">
                     <div>
                         <h2><i class="fas fa-bell"></i> Tokens FCM suscritos</h2>
-                        <p class="panel-subtitle">Visualiza y administra los tokens suscritos al topic <strong>pedidos</strong>.</p>
+                        <p class="panel-subtitle">Visualiza y administra los tokens por ubicación para cada topic de pedidos.</p>
                     </div>
                     <span id="fcm-token-count" class="badge">0</span>
                 </div>
+
+                <div class="fcm-location-summary">
+                    <div class="location-card is-active" data-location="ubicacionA">
+                        <span class="location-chip">Ubicación A</span>
+                        <strong id="fcm-count-ubicacionA">0</strong>
+                        <small>tokens suscritos</small>
+                    </div>
+                    <div class="location-card" data-location="ubicacionB">
+                        <span class="location-chip">Ubicación B</span>
+                        <strong id="fcm-count-ubicacionB">0</strong>
+                        <small>tokens suscritos</small>
+                    </div>
+                </div>
+
                 <div class="fcm-token-form">
+                    <select id="fcm-location-select" class="location-select">
+                        <option value="ubicacionA">Ubicación A</option>
+                        <option value="ubicacionB" selected>Ubicación B</option>
+                    </select>
                     <input id="fcm-token-input" type="text" placeholder="Pega aquí un token FCM para suscribir" autocomplete="off" />
                     <div class="fcm-token-buttons">
                         <button class="btn btn-success" id="fcm-subscribe-button"><i class="fas fa-plus-circle"></i> Suscribir</button>

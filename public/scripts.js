@@ -1064,6 +1064,8 @@ async function loadFcmTokens() {
         const data = await response.json();
 
         const listContainer = document.getElementById('fcm-token-list');
+        const countBadge = document.getElementById('fcm-token-count');
+        const locationSelect = document.getElementById('fcm-location-select');
         if (!listContainer) return;
 
         if (!response.ok || !data.success) {
@@ -1075,12 +1077,17 @@ async function loadFcmTokens() {
             return;
         }
 
-        const tokens = Array.isArray(data.tokens) ? data.tokens : [];
-        const countBadge = document.getElementById('fcm-token-count');
+        const selectedLocation = locationSelect ? locationSelect.value : null;
+        const tokensMap = data.tokens && typeof data.tokens === 'object' && !Array.isArray(data.tokens)
+            ? data.tokens
+            : { ubicacionA: Array.isArray(data.tokens) ? data.tokens : [], ubicacionB: [] };
+
+        const tokens = Array.isArray(tokensMap[selectedLocation]) ? tokensMap[selectedLocation] : [];
+
         if (countBadge) countBadge.textContent = String(tokens.length);
 
         if (tokens.length === 0) {
-            listContainer.innerHTML = '<p class="token-list-placeholder">No hay tokens cargados aún. Presiona "Cargar tokens".</p>';
+            listContainer.innerHTML = '<p class="token-list-placeholder">No hay tokens cargados para esta ubicación todavía.</p>';
             return;
         }
 
@@ -1117,9 +1124,11 @@ async function loadFcmTokens() {
 async function subscribeFcmToken() {
     try {
         const input = document.getElementById('fcm-token-input');
-        if (!input) return;
+        const locationSelect = document.getElementById('fcm-location-select');
+        if (!input || !locationSelect) return;
 
         const token = input.value.trim();
+        const ubicacion = locationSelect.value;
         if (!token) {
             showNotificationPanel('Ingresa un token FCM válido antes de suscribir.', 'error');
             return;
@@ -1128,12 +1137,12 @@ async function subscribeFcmToken() {
         const response = await fetch('/api/suscribir-pedidos', {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
+            body: JSON.stringify({ token, ubicacion })
         });
 
         const data = await response.json();
         if (response.ok && data.success) {
-            showNotificationPanel('Token suscrito correctamente al topic pedidos.', 'success');
+            showNotificationPanel(`Token suscrito correctamente en ${ubicacion}.`, 'success');
             input.value = '';
             loadFcmTokens();
         } else {
