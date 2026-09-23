@@ -4605,18 +4605,20 @@ app.post('/api/suscribir-pedidos', rateLimitMiddleware, async (req, res) => {
 
       const normalizedTokens = nextTokens.map(normalizeTokenRecord).filter(Boolean);
       const exists = normalizedTokens.some(item => item.token === sanitizedToken && (item.ubicacion || ubicacion) === ubicacion);
+      const appName = ubicacion === 'ubicacionA' ? 'matanzas' : 'mayabeque';
+      const sourceName = ubicacion === 'ubicacionA' ? 'app-matanzas' : 'app-mayabeque';
 
       if (!exists) {
         normalizedTokens.push({
           token: sanitizedToken,
           ubicacion,
-          source: 'app-mayabeque',
+          source: sourceName,
           platform: 'android',
           createdAt: new Date().toISOString(),
-          app: 'mayabeque'
+          app: appName
         });
         await writeSecondaryNode(db, 'subscriptions/tokens', normalizedTokens);
-        addLog(`Token almacenado en RTDB de ${ubicacion}: ${sanitizedToken} | source=${ubicacion === 'ubicacionB' ? 'app-mayabeque' : 'app-matanzas'}`);
+        addLog(`Token almacenado en RTDB de ${ubicacion}: ${sanitizedToken} | source=${sourceName}`);
       }
       return res.json({ success: true, message: `Token suscrito al topic ${topic}`, token: sanitizedToken, ubicacion });
     }
