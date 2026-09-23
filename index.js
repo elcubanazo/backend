@@ -2212,6 +2212,18 @@ function _escapeHtml(unsafe) {
 app.post("/guardar-estadistica", rateLimitMiddleware, async (req, res) => {
     try {
         const nuevaEstadistica = req.body || {};
+        const ipNormalizado = String(nuevaEstadistica.ip || req.ip || 'Desconocido').trim() || 'Desconocido';
+        const paisNormalizado = String(
+            nuevaEstadistica.pais || nuevaEstadistica.country || nuevaEstadistica.country_name || 'Desconocido'
+        ).trim() || 'Desconocido';
+        const origenNormalizado = String(
+            nuevaEstadistica.origen || nuevaEstadistica.url || req.headers.referer || 'Directo'
+        ).trim() || 'Directo';
+
+        nuevaEstadistica.ip = ipNormalizado;
+        nuevaEstadistica.pais = paisNormalizado;
+        nuevaEstadistica.origen = origenNormalizado;
+
         addLog(`Recibida nueva estadística: ${JSON.stringify(nuevaEstadistica)}`);
 
         if (!nuevaEstadistica.ip || !nuevaEstadistica.pais || !nuevaEstadistica.origen) {
