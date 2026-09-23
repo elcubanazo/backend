@@ -567,22 +567,8 @@ function loadLocationServiceAccount(envName) {
 // Si no se define FIREBASE_UBICACION_X_SERVICE_ACCOUNT, se usa el mismo service account
 // de la Primary (asumiendo que las 3 RTDB viven en el mismo proyecto Firebase).
 const locationDbs = {};
-
-for (const locId of LOCATION_IDS) {
-    const { urlEnv, svcEnv } = LOCATION_ENV_MAP[locId];
-    const dbUrl = process.env[urlEnv];
-    if (!dbUrl) {
-        console.warn(`WARN: ${urlEnv} no está definida. ${locId} no tendrá RTDB de pedidos/estadísticas hasta configurarla.`);
-        continue;
-    }
-    const svcAccount = loadLocationServiceAccount(svcEnv) || serviceAccount;
-    admin.initializeApp({
-        credential: admin.credential.cert(svcAccount),
-        databaseURL: dbUrl
-    }, `loc-${locId}`);
-    locationDbs[locId] = admin.app(`loc-${locId}`).database();
-    addLog(`Instancia de Firebase RTDB para ${locId} inicializada correctamente.`);
-}
+const locationApps = {};
+const locationMessaging = {};
 
 function isValidLocation(loc) {
     return LOCATION_IDS.includes(loc);
@@ -590,6 +576,41 @@ function isValidLocation(loc) {
 
 function getLocationDisplayName(loc) {
     return LOCATION_DISPLAY_NAMES[loc] || loc;
+}
+
+function getLocationMessaging(loc) {
+    if (!isValidLocation(loc)) {
+        return admin.messaging();
+    }
+    return locationMessaging[loc] || admin.messaging();
+}
+
+for (const locId of LOCATION_IDS) {
+    const { urlEnv, svcEnv } = LOCATION_ENV_MAP[locId];
+    const dbUrl = process.env[urlEnv];
+    const svcAccount = loadLocationServiceAccount(svcEnv) || serviceAccount;
+    const appName = `loc-${locId}`;
+
+    if (!admin.apps.some(app => app.name === appName)) {
+        const appConfig = {
+            credential: admin.credential.cert(svcAccount)
+        };
+        if (dbUrl) {
+            appConfig.databaseURL = dbUrl;
+        }
+        admin.initializeApp(appConfig, appName);
+    }
+
+    const appInstance = admin.app(appName);
+    locationApps[locId] = appInstance;
+    locationMessaging[locId] = admin.messaging(appInstance);
+
+    if (dbUrl) {
+        locationDbs[locId] = appInstance.database();
+        addLog(`Instancia de Firebase RTDB para ${locId} inicializada correctamente.`);
+    } else {
+        console.warn(`WARN: ${urlEnv} no está definida. ${locId} no tendrá RTDB de pedidos/estadísticas hasta configurarla, pero sí tendrá app de FCM separada para notificaciones.`);
+    }
 }
 
 function getCorreoDestinatarioPorUbicacion(loc) {
@@ -2580,7 +2601,7 @@ app.post('/send-pedido', rateLimitMiddleware, async (req, res) => {
         // también, pero un fallo de push NUNCA debe tumbar el pedido (por
         // eso va en su propio try/catch independiente del correo).
         try {
-            const responsePush = await admin.messaging().send({
+            const responsePush = await getLocationMessaging(ubicacion).send({
                 notification: {
                     title: '¡Nuevo Pedido Recibido! 📦',
                     body: `${nombreComprador} ha comprado un total de $${totalPedido}.`
@@ -4458,9 +4479,17 @@ app.get('/api/bootstrap', async (req, res) => {
 // =====================================================
 app.post("/api/send-test-notification", async (req, res) => {
   try {
-    const { titulo, mensaje, tipoNotificacion } = req.body;
+    const { titulo, mensaje, tipoNotificacion, ubicacion } = req.body || {};
+    const targetLocation = isValidLocation(ubicacion) ? ubicacion : (req.ubicacion || null);
 
-    addLog(`Enviando notificación de prueba: ${titulo} - ${mensaje}`);
+    if (!isValidLocation(targetLocation)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debes indicar una ubicación válida para enviar la prueba (ubicacionA o ubicacionB).'
+      });
+    }
+
+    addLog(`Enviando notificación de prueba: ${titulo} - ${mensaje} (${targetLocation})`);
 
     const message = {
       notification: {
@@ -4469,14 +4498,14 @@ app.post("/api/send-test-notification", async (req, res) => {
       },
       data: {
         tipo: tipoNotificacion || "test",
+        ubicacion: targetLocation,
         timestamp: new Date().toISOString(),
         click_action: "FLUTTER_NOTIFICATION_CLICK"
       },
-      topic: `pedidos_${req.ubicacion}` // Enviando al mismo topic que los pedidos reales de esta ubicación
+      topic: `pedidos_${targetLocation}`
     };
 
-    // Enviar la notificación
-    const responsePush = await admin.messaging().send(message);
+    const responsePush = await getLocationMessaging(targetLocation).send(message);
     
     addLog(`✅ Notificación de prueba enviada correctamente: ${responsePush}`);
     console.log("✅ Notificación de prueba enviada con éxito:", responsePush);
@@ -4484,7 +4513,8 @@ app.post("/api/send-test-notification", async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Notificación de prueba enviada correctamente",
-      messageId: responsePush
+      messageId: responsePush,
+      ubicacion: targetLocation
     });
 
   } catch (error) {
@@ -4533,7 +4563,8 @@ app.post('/api/suscribir-pedidos', rateLimitMiddleware, async (req, res) => {
 
     const sanitizedToken = token.trim();
     const topic = `pedidos_${ubicacion}`;
-    await admin.messaging().subscribeToTopic(sanitizedToken, topic);
+    const locationMessagingClient = getLocationMessaging(ubicacion);
+    await locationMessagingClient.subscribeToTopic(sanitizedToken, topic);
 
     const db = locationDbs[ubicacion];
     if (db) {
