@@ -70,7 +70,7 @@ function cacheDelPrefix(prefix) {
 // desde el panel), datos casi estáticos usan TTL más largo.
 const CACHE_TTL = {
     CATALOG: 30 * 1000,        // products / packs
-    PUBLIC_DATA: 60 * 1000,    // afiliados, mensajes, evento, info, pay
+    PUBLIC_DATA: 60 * 1000,    // afiliados, mensajes, info, pay
     NOTIFICATION: 30 * 1000,   // notification-banner
     RATINGS: 30 * 1000,        // product-ratings por producto
     KNOWN_IPS: 5 * 60 * 1000,  // set de IPs conocidas (usuario recurrente)
@@ -1713,7 +1713,6 @@ const PUBLIC_ROUTES = [
     { method: 'GET', prefix: '/api/notification-banner' },
     { method: 'GET', prefix: '/api/afiliados' },
     { method: 'GET', prefix: '/api/mensajes' },
-    { method: 'GET', prefix: '/api/evento' },
     { method: 'GET', prefix: '/api/info' },
     { method: 'GET', prefix: '/api/pay' },
     { method: 'GET', prefix: '/api/stream/' },
@@ -3073,19 +3072,6 @@ app.get('/api/mensajes', async (req, res) => {
     }
 });
 
-app.get('/api/evento', async (req, res) => {
-    try {
-        const evento = await getOrSetCache('evento', CACHE_TTL.PUBLIC_DATA, async () => {
-            const snapshot = await rtdb.ref('evento').once('value');
-            return snapshot.val() || null;
-        });
-        setPublicCacheHeaders(res, 120, 600);
-        return res.json({ success: true, evento: evento || null });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Error al obtener evento', error: error.message });
-    }
-});
-
 app.get('/api/info', async (req, res) => {
     try {
         const info = await getOrSetCache('info', CACHE_TTL.PUBLIC_DATA, async () => {
@@ -3549,7 +3535,6 @@ const SSE_ALLOWED_PATHS = {
     'notification-banner': { path: NOTIFICATION_BANNER_PATH, mode: 'full' },
     'afiliados': { path: 'afiliados', mode: 'full' },
     'mensajes': { path: 'mensajes', mode: 'full' },
-    'evento': { path: 'evento', mode: 'full' },
     'info': { path: 'info', mode: 'full' },
     'pay': { path: 'pay', mode: 'full' }
 };
@@ -4428,7 +4413,7 @@ app.get('/api/ratings-summary', async (req, res) => {
 });
 
 // GET /api/bootstrap -> junta en UNA sola respuesta todo lo que la página
-// pide por separado al cargar (products, packs, evento, info, mensajes,
+// pide por separado al cargar (products, packs, info, mensajes,
 // notification-banner, pay, ratings-summary). Cada pieza sigue usando su
 // propia caché en memoria (getOrSetCache), así que esto no duplica lecturas
 // a Firebase: solo evita que el frontend dispare 7-8 invocaciones de
@@ -4441,7 +4426,7 @@ app.get('/api/bootstrap', async (req, res) => {
         if (!isValidLocation(ubicacion)) {
             return res.status(400).json({ success: false, message: 'Debes indicar una ubicación válida (?ubicacion=ubicacionA o ubicacionB).' });
         }
-        const [productMap, packMap, banner, mensajes, evento, info, pay, ratings] = await Promise.all([
+        const [productMap, packMap, banner, mensajes, info, pay, ratings] = await Promise.all([
             getSecondaryProductMap(ubicacion),
             getPackMap(ubicacion),
             getOrSetCache(`notification-banner:${ubicacion}`, CACHE_TTL.NOTIFICATION, async () => {
@@ -4452,10 +4437,6 @@ app.get('/api/bootstrap', async (req, res) => {
                 const snapshot = await locationDbs[ubicacion].ref('mensajes').once('value');
                 const data = snapshot.val();
                 return Array.isArray(data) ? data : (data ? Object.values(data) : []);
-            }),
-            getOrSetCache('evento', CACHE_TTL.PUBLIC_DATA, async () => {
-                const snapshot = await rtdb.ref('evento').once('value');
-                return snapshot.val() || null;
             }),
             getOrSetCache('info', CACHE_TTL.PUBLIC_DATA, async () => {
                 const snapshot = await rtdb.ref('info').once('value');
@@ -4476,7 +4457,6 @@ app.get('/api/bootstrap', async (req, res) => {
             packs: Object.values(packMap || {}),
             banner: banner || null,
             mensajes: mensajes || [],
-            evento: evento || null,
             info: info || [],
             pay: pay || null,
             ratings: ratings || {}
